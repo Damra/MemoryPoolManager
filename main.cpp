@@ -18,27 +18,31 @@ public:
         : blockSize(blockSize), capacity(capacity) {
         blocks.reserve(capacity);
         for (size_t i = 0; i < capacity; ++i) {
-            blocks.push_back(malloc(blockSize));
+            blocks.push_back(malloc(blockSize)); // Allocate a block of memory
         }
     }
 
     ~MemoryPool() {
         for (void* block : blocks) {
-            free(block);
+            free(block); // Free all allocated blocks
         }
     }
 
     void* allocate() {
         if (blocks.empty()) {
-            throw bad_alloc();
+            throw bad_alloc(); // If no blocks left, throw bad_alloc
         }
-        void* block = blocks.back();
-        blocks.pop_back();
-        return block;
+        void* block = blocks.back(); // Get last allocated block
+        blocks.pop_back(); // Remove from available blocks
+        return block; // Return memory block
     }
 
     void deallocate(void* block) {
-        blocks.push_back(block);
+        blocks.push_back(block); // Return the block to the pool
+    }
+
+    bool hasAvailableMemory() const {
+        return !blocks.empty();
     }
 };
 
@@ -57,15 +61,20 @@ public:
 
     T* allocate(size_t n) {
         if (n == 0) {
-            return nullptr; // Null pointer for zero elements
+            return nullptr; // Return null pointer for zero elements
+        }
+
+        // Check if there's enough memory
+        if (!pool.hasAvailableMemory()) {
+            throw bad_alloc(); // No memory available, throw exception
         }
 
         void* memory = pool.allocate();
-        return static_cast<T*>(memory);
+        return static_cast<T*>(memory); // Allocate memory from the pool
     }
 
     void deallocate(T* p, size_t n) {
-        pool.deallocate(p);
+        pool.deallocate(p); // Deallocate memory to the pool
     }
 
     template <typename U>
@@ -91,7 +100,7 @@ unique_ptr<T, function<void(T*)>> make_unique_pool(MemoryPool& pool, Args&&... a
     auto deleter = [&pool](T* ptr) {
         ptr->~T(); // Call the destructor explicitly
         pool.deallocate(ptr); // Deallocate the memory back to the pool
-        };
+    };
 
     // Allocate memory from the pool
     void* memory = pool.allocate();
@@ -119,30 +128,35 @@ public:
 };
 
 int main() {
-    PoolManager poolManager(sizeof(int), 10);
+    try {
+        PoolManager poolManager(sizeof(int), 10);
 
-    // Compile-time factorial calculation
-    constexpr int fact5 = factorial(5);
-    cout << "Factorial of 5 (compile-time): " << fact5 << endl;
+        // Compile-time factorial calculation
+        constexpr int fact5 = factorial(5);
+        cout << "Factorial of 5 (compile-time): " << fact5 << endl;
 
-    // Create objects
-    auto ptr1 = poolManager.create<int>(42);
-    auto ptr2 = poolManager.create<int>(100);
+        // Create objects
+        auto ptr1 = poolManager.create<int>(42);
+        auto ptr2 = poolManager.create<int>(100);
 
-    cout << "ptr1: " << *ptr1 << endl;
-    cout << "ptr2: " << *ptr2 << endl;
+        cout << "ptr1: " << *ptr1 << endl;
+        cout << "ptr2: " << *ptr2 << endl;
 
-    // Create vector with custom allocator
-    auto vec = poolManager.create<vector<int, PoolAllocator<int>>>(PoolAllocator<int>(poolManager.pool));
-    vec->push_back(1);
-    vec->push_back(2);
-    vec->push_back(3);
+        // Create vector with custom allocator
+        auto vec = poolManager.create<vector<int, PoolAllocator<int>>>(PoolAllocator<int>(poolManager.pool));
+        vec->push_back(1);
+        vec->push_back(2);
+        vec->push_back(3);
 
-    cout << "Vector elements: ";
-    for (int num : *vec) {
-        cout << num << " ";
+        cout << "Vector elements: ";
+        for (int num : *vec) {
+            cout << num << " ";
+        }
+        cout << endl;
+
+    } catch (const bad_alloc& e) {
+        cout << "Memory allocation failed: " << e.what() << endl;
     }
-    cout << endl;
 
     return 0;
 }
